@@ -1435,26 +1435,12 @@ class System(object):
             help(rhs)
 
         """
-        # TODO : convert this to calling evaluate_outputs() and then selecting
-        # the constraint values.
         if self.num_constraints == 0:
             raise ValueError('This system has no constraints.')
 
-        x, t, args = self._prep_x_t_overrides(x, t)
-
-        if len(x.shape) == 1 and not isinstance(t, float):
-            raise ValueError('Time must be a float.')
-        elif len(x.shape) == 1 and isinstance(t, float):
-            y = self.evaluate_ode_function(x, t, *args)[1]
-            return y[self._constraint_idxs]
-        elif len(x.shape) == 2:
-            if x.shape[0] != len(t):
-                raise ValueError('x trajectory must have same length as t.')
-            con = np.zeros((x.shape[0], self.num_constraints))
-            for i, (ti, xi) in enumerate(zip(t, x)):
-                y = self.evaluate_ode_function(xi, ti, *args)[1]
-                con[i, :] = y[self._constraint_idxs]
-            return con
+        outputs = self.evaluate_outputs(x=x, t=t)
+        constraint_idxs = [self._simple_idxs[i] for i in self._constraint_idxs]
+        return outputs[..., constraint_idxs]
 
     def evaluate_holonomic_constraints(self, x=None, t=None):
         """Returns the values of the configuration at the initial condition or,
