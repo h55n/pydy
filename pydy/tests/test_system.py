@@ -1211,3 +1211,36 @@ def test_issue_427():
                 initial_conditions={x:0., xv:10.},
                 times=np.linspace(0.0, 6, 60))
     sys.integrate()
+
+
+@pytest.mark.parametrize('linear_output_first', [False, True])
+def test_evaluate_constraints_output_order(linear_output_first):
+    q1, q2, u1, u2, y = me.dynamicsymbols('q1 q2 u1 u2 y')
+    frame = me.ReferenceFrame('N')
+    point = me.Point('P')
+    point.set_vel(frame, u1*frame.x + u2*frame.y)
+    particle = me.Particle('particle', point, sm.S.One)
+    kane = me.KanesMethod(
+        frame, q_ind=[q1, q2], u_ind=[u1], u_dependent=[u2],
+        kd_eqs=[q1.diff() - u1, q2.diff() - u2],
+        velocity_constraints=[u2 - q1])
+    kane.kanes_equations([particle], [])
+    outputs = {y: u1.diff() - y + q1} if linear_output_first else {}
+    system = System(kane, outputs=outputs)
+    if not linear_output_first:
+        system.outputs[y] = u1.diff() - y + q1
+    system.initial_conditions = {q1: 2.0, u2: 5.0}
+
+    np.testing.assert_allclose(system.evaluate_constraints(), [3.0])
+    states = np.array([[2.0, 3.0, 4.0, 5.0, 0.0],
+                       [3.0, 3.0, 4.0, 8.0, 0.0]])
+    times = np.array([0.0, 1.0])
+    np.testing.assert_allclose(
+        system.evaluate_constraints(x=states, t=times), [[3.0], [5.0]])
+    assert system.evaluate_constraints(x=states[:0], t=times[:0]).shape == (0, 1)
+    with pytest.raises(ValueError, match='t must be array'):
+        system.evaluate_constraints(x=states, t=0.0)
+    with pytest.raises(ValueError, match='same length'):
+        system.evaluate_constraints(x=states, t=times[:1])
+    with pytest.raises(ValueError, match='Time must be a float'):
+        system.evaluate_constraints(x=states[0], t=times)
